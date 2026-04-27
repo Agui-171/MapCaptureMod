@@ -3,6 +3,7 @@ using HarmonyLib;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
@@ -16,11 +17,17 @@ namespace AMapMod
         public int TotalIndex { get; private set; }
         public float PPU { get; set; } = 32f;
         private bool _cancelRequested = false;
-        private MonoBehaviour _coroutineRunner;
+        /// <summary>
+        /// 
+        /// </summary>
+        private readonly MonoBehaviour _coroutineRunner;
         public ExportManager(MonoBehaviour coroutineRunner)
         {
             _coroutineRunner = coroutineRunner;
         }
+        /// <summary>
+        /// 取消
+        /// </summary>
         public void Cancel() => _cancelRequested = true;
         /// <summary>
         /// 单独导一张图
@@ -77,15 +84,36 @@ namespace AMapMod
         /// <param name="sceneName"></param>
         private void Process(string zoneName, string sceneName)
         {
-            Rect fullBounds = Utils.GetBounds();
-            int targetW = Mathf.RoundToInt(fullBounds.width * PPU);
-            int targetH = Mathf.RoundToInt(fullBounds.height * PPU);
-            Camera captureCam = Utils.Create(fullBounds);
-            Texture2D photo = Utils.Render(captureCam, targetW, targetH);
-            ExportPng(photo, zoneName, sceneName);
-            Object.Destroy(photo);
-            Object.Destroy(captureCam.gameObject);
-            if(HeroController.instance) HeroController.instance.GetComponent<MeshRenderer>().enabled = true;
+            try
+            {
+                Rect fullBounds = Utils.GetBounds();
+                int targetW = Mathf.RoundToInt(fullBounds.width * PPU);
+                int targetH = Mathf.RoundToInt(fullBounds.height * PPU);
+                /// 限制最大尺寸防止报错
+                int maxSize = SystemInfo.maxTextureSize;
+                if(targetW > maxSize || targetH > maxSize)
+                {
+                    Debug.LogWarning($"[MapMod] 场景 {sceneName} 尺寸 ({targetW}x{targetH}) 超出限制 ({maxSize})，自动进行等比缩放");
+                    float scale = Mathf.Min((float)maxSize / targetW, (float)maxSize / targetH);
+                    targetW = Mathf.RoundToInt(targetW * scale);
+                    targetH = Mathf.RoundToInt(targetH * scale);
+                }
+                Camera captureCam = Utils.Create(fullBounds);
+                Texture2D photo = Utils.Render(captureCam, targetW, targetH);
+                ExportPng(photo, zoneName, sceneName);
+                Object.Destroy(photo);
+                Object.Destroy(captureCam.gameObject);
+                if(HeroController.instance) HeroController.instance.GetComponent<MeshRenderer>().enabled = true;
+            }
+            catch(System.Exception ex)
+            {
+                Debug.LogError($"[MapMod] 导出场景 {sceneName} 出错: {ex.Message}");
+            }
+            finally
+            {
+                if(HeroController.instance && HeroController.instance.GetComponent<MeshRenderer>())
+                    HeroController.instance.GetComponent<MeshRenderer>().enabled = true;
+            }
         }
         /// <summary>
         /// 导出png
@@ -166,20 +194,25 @@ namespace AMapMod
             if(hc == null) return;
             if(hc.GetComponent<MeshRenderer>()) hc.GetComponent<MeshRenderer>().enabled = false;
             if(hc.vignette != null) hc.vignette.enabled = false;
-            /// 去除遮罩，雾，暗色，蒙版
+            /// 去除遮罩，雾，暗色，蒙版，热浪
+            string[] blockKey = { "vignette", "fog", "dark", "mask", "heatplane" };
             foreach(var go in Object.FindObjectsOfType<GameObject>(true))
             {
                 string n = go.name.ToLowerInvariant();
-                if(n.Contains("vignette") || n.Contains("fog") || n.Contains("dark") || n.Contains("mask"))
+                if(blockKey.Any(keyword => n.Contains(keyword)))
+                {
                     go.SetActive(false);
+                }
             }
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = Color.white * (ModCore.SceneBrightness / 1.3f);
             if(GameCameras.instance != null)
             {
                 var be = GameCameras.instance.GetComponent<BrightnessEffect>();
                 if(be != null)
                 {
                     be.StopAllCoroutines();
-                    be._Brightness = 1.2f;
+                    be._Brightness = ModCore.SceneBrightness;
                     be._Contrast = 1f;
                 }
                 if(GameCameras.instance.sceneColorManager != null)

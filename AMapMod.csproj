@@ -22,6 +22,9 @@
 		<Reference Include="BepInEx">
 			<HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\content\app_1030300\depot_1030301\BepInEx\core\BepInEx.dll</HintPath>
 		</Reference>
+		<Reference Include="TeamCherry.Localization">
+		  <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\content\app_1030300\depot_1030301\Hollow Knight Silksong_Data\Managed\TeamCherry.Localization.dll</HintPath>
+		</Reference>
 		<Reference Include="TeamCherry.TK2D">
 			<HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\content\app_1030300\depot_1030301\Hollow Knight Silksong_Data\Managed\TeamCherry.TK2D.dll</HintPath>
 		</Reference>
