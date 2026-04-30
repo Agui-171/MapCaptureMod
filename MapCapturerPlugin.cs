@@ -1,16 +1,30 @@
 ﻿using BepInEx;
 using GlobalEnums;
+using HarmonyLib;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 namespace MapCapturerMod
 {
-    [BepInPlugin("NaughtyCat.MapCapturerMod", "MapCapturerMod", "1.0.0")]
+    [HarmonyPatch(typeof(InputHandler), "SetCursorEnabled")]
+    public static class CursorPatch
+    {
+        [HarmonyPrefix]
+        public static bool Prefix(ref bool isEnabled)
+        {
+            if(MapCapturerPlugin.ShowUI)
+            {
+                isEnabled = true;
+            }
+            return true;
+        }
+    }
+    [BepInPlugin("NaughtyCat.MapCapturerMod", "MapCapturerMod", "1.0.2")]
     public class MapCapturerPlugin : BaseUnityPlugin
     {
         public static MapCapturerPlugin Instance;
-        private bool _showUI = false;
+        public static bool ShowUI = false;
         private bool _waitingKey;
         private KeyCode _uiKey = KeyCode.Y;
         private Rect _uiRect = new Rect(100, 400, 350, 600);
@@ -21,15 +35,24 @@ namespace MapCapturerMod
         {
             Instance = this;
             _zones = new List<MapZone>();
-            Debug.Log("[MapCapturer] 已加载");
+            try
+            {
+                var harmony = new Harmony("NaughtyCat.MapCapturerMod");
+                harmony.PatchAll(typeof(CursorPatch));
+                Debug.Log("[MapCapturer] 已加载");
+            }
+            catch(Exception e)
+            {
+                Debug.LogError("[MapCapturer] 加载失败: " + e.Message);
+            }
         }
         private void Update()
         {
             if(_waitingKey || Time.frameCount == _blockFrame) return;
             if(Input.GetKeyDown(_uiKey))
             {
-                _showUI = !_showUI;
-                if(_showUI && _zones.Count == 0)
+                ShowUI = !ShowUI;
+                if(ShowUI && _zones.Count == 0)
                 {
                     _zones.Clear();
                     foreach(MapZone zone in Enum.GetValues(typeof(MapZone)))
@@ -44,7 +67,7 @@ namespace MapCapturerMod
         }
         private void OnGUI()
         {
-            if(_showUI) _uiRect = GUI.Window(0, _uiRect, Draw, "MapCapturerMod");
+            if(ShowUI) _uiRect = GUI.Window(0, _uiRect, Draw, "MapCapturerMod");
         }
         private void Draw(int id)
         {
@@ -60,7 +83,7 @@ namespace MapCapturerMod
             BrightnessRow();
             ListRow();
             PathRow();
-            if(GUILayout.Button("关闭面板")) _showUI = false;
+            if(GUILayout.Button("关闭面板")) ShowUI = false;
             GUI.DragWindow();
         }
         private void RebindRow()
